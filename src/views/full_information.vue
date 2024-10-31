@@ -1,0 +1,756 @@
+<template>
+  <div class="page-layout">
+    <!-- Left side: Parking Lot -->
+    <div class="parking-lot-container">
+      <h1 class="title">B 区入口停车场情况：</h1>
+      <div class="parking-lot">
+        <!-- Status Circle1 (flashes red when warning signal is received) -->
+        <div class="status-circle1" :class="{ red: isWarning, breathing: isWarning }"></div>
+
+        <!-- Status Circle2 with "C区" -->
+        <div class="status-circle2" :class="{ breathing: flashBlue }">
+          <span class="circle-text">C区</span>
+        </div>
+
+        <!-- Blue Blocks -->
+        <div v-for="block in blueBlocks" :key="block.id" class="block blue" :style="block.style"></div>
+
+        <!-- Green Blocks (dynamically rendered by id, with "空" text) -->
+        <div
+          v-for="block in greenBlocks"
+          :key="block.id"
+          class="block green"
+          :class="{ red: block.redStatus, breathing: flashGreen }"
+          :style="block.style"
+        >
+          <span class="block-text" v-if="flashGreen">空</span>
+        </div>
+
+        <!-- Light Green Blocks (with "空" text) -->
+        <div
+          v-for="block in yellowBlocks"
+          :key="block.id"
+          class="block light-green"
+          :class="{ breathing: flashYellow }"
+          :style="block.style"
+        >
+          <span class="block-text" v-if="flashYellow">空</span>
+        </div>
+
+        <!-- Black Road with text and arrows -->
+        <div class="road">
+          <!-- New welcome message with breathing effect -->
+          <div class="road-text breathing" v-show="showWelcomeText">摄像头接入中处理中</div>
+
+          <!-- Existing road texts -->
+          <div class="road-text" v-show="showLeftArrow">立体停车场</div>
+          <div class="road-text" v-show="showRightArrow">B 区缓冲停车场</div>
+          <div class="road-text" v-show="showCZoneText">B 区无合适车位，请前往C区</div>
+        </div>
+
+        <!-- Arrow pointing to C区 -->
+        <div class="arrow c-area-arrow" v-show="flashBlue"></div>
+
+        <!-- Left and Right Arrows on the road -->
+        <div class="arrow left-turn" v-show="showLeftArrow"></div>
+        <div class="arrow right-turn" v-show="showRightArrow"></div>
+      </div>
+    </div>
+
+    <!-- Right half of the page -->
+    <div class="right-half">
+      <!-- Car information section -->
+      <div class="car-details-container">
+        <!-- "车辆情况" Section -->
+        <div class="car-info">
+          <h2>车情况 {FAW Bestune B70} 和长 宽 高:</h2>
+          <ul>
+            <li v-if="carModel">车模型: {{ carModel }}</li>
+          </ul>
+
+          <!-- Length progress bar display with breathing/flashing effect -->
+          <div class="container">
+            <div class="container-label">长: {{ carInfo.length }} m</div>
+            <div class="bar">
+              <div
+                class="fill"
+                :style="{ width: lengthPercentage + '%' }"
+                :class="{
+                  red: carInfo.length > 5.3,
+                  green: carInfo.length <= 5.3,
+                  'breathing': carInfo.length <= 5.3,
+                  'flashing': carInfo.length > 5.3
+                }"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Width progress bar display with breathing/flashing effect -->
+          <div class="container">
+            <div class="container-label">宽: {{ carInfo.width }} m</div>
+            <div class="bar">
+              <div
+                class="fill"
+                :style="{ width: widthPercentage + '%' }"
+                :class="{
+                  red: carInfo.width > 1.9,
+                  green: carInfo.width <= 1.9,
+                  'breathing': carInfo.width <= 1.9,
+                  'flashing': carInfo.width > 1.9
+                }"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Height progress bar display with breathing/flashing effect -->
+          <div class="container">
+            <div class="container-label">高: {{ carInfo.height }} m</div>
+            <div class="bar">
+              <div
+                class="fill"
+                :style="{ width: heightPercentage + '%' }"
+                :class="{
+                  red: carInfo.height > 2,
+                  green: carInfo.height <= 2,
+                  'breathing': carInfo.height <= 2,
+                  'flashing': carInfo.height > 2
+                }"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Output based on car dimensions -->
+          <div>
+            <strong>结果:</strong> {{ output }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Car image display section -->
+      <div class="car-image-display">
+        <h2>车映像</h2>
+
+        <div class="image-row">
+          <transition-group name="fade" tag="div" class="image-container">
+            <img
+              v-for="(image, index) in images"
+              :key="image"
+              :src="image"
+              :class="{
+                'middle-image': index === 1 && showEnlarge, 
+                'side-image': (index === 0 || index === 2) && showEnlarge
+              }"
+              alt="Car Image"
+            />
+          </transition-group>
+        </div>
+
+        <p v-if="!allImagesFetched">Loading images...</p>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      // Car info data
+      carInfo: {
+        length: 4.81,
+        width: 1.84,
+        height: 1.45,
+      },
+      carModel: '',
+      output: "车辆满足停车场需求", // Output value (0 or 1)
+
+      // Data for car image display
+      images: [], // Array to hold the 3 images
+      imageNumber: 1, // Current image number
+      allImagesFetched: false, // Flag to indicate if all images have been fetched
+      showEnlarge: false, // Flag to control when to enlarge and move the images
+
+      // Parking lot data
+      status: 'yellow',
+      greenStatus: 'green',
+      flashGreen: false, // Flashing green blocks
+      flashYellow: false, // Flashing yellow blocks
+      isWarning: false, // Flashing red for status-circle1
+      flashBlue: false, // Flashing blue circle (C区)
+      showLeftArrow: false, // Left arrow visibility
+      showRightArrow: false, // Right arrow visibility
+      showCZoneText: false, // Show text for C区
+      showWelcomeText: true, // New state for welcome message
+
+      // Parking lot blocks
+      blueBlocks: [
+        { id: 2, style: { top: '60px', left: '70px', width: '40px', height: '60px' } },
+        { id: 4, style: { top: '60px', left: '170px', width: '40px', height: '60px' } },
+        { id: 5, style: { top: '60px', left: '220px', width: '40px', height: '60px' } },
+        { id: 6, style: { top: '60px', left: '270px', width: '40px', height: '60px' } },
+        { id: 14, style: { top: '60px', left: '330px', width: '40px', height: '60px' } },
+
+        { id: 7, style: { top: '150px', left: '120px', width: '40px', height: '60px' } },
+        { id: 8, style: { top: '150px', left: '170px', width: '40px', height: '60px' } },
+        { id: 17, style: { top: '150px', left: '70px', width: '40px', height: '60px' } },
+        { id: 9, style: { top: '60px', left: '490px', width: '60px', height: '40px' } },
+        { id: 10, style: { top: '110px', left: '490px', width: '60px', height: '40px' } },
+        { id: 11, style: { top: '10px', left: '490px', width: '60px', height: '40px' } },
+
+        { id: 20, style: { top: '350px', left: '400px', width: '70px', height: '50px' } },
+        { id: 21, style: { top: '410px', left: '310px', width: '60px', height: '70px' } },
+
+        { id: 15, style: { top: '60px', left: '380px', width: '40px', height: '60px' } },
+        { id: 16, style: { top: '10px', left: '360px', width: '60px', height: '40px' } },
+      ],
+
+      greenBlocks: [
+        { id: 1, style: { top: '60px', left: '20px', width: '40px', height: '60px' } },
+
+        { id: 12, style: { top: '150px', left: '440px', width: '40px', height: '60px' } },
+        { id: 13, style: { top: '150px', left: '390px', width: '40px', height: '60px' } },
+        { id: 3, style: { top: '60px', left: '120px', width: '40px', height: '60px' } },
+      ],
+
+      yellowBlocks: [
+        { id: 1, style: { top: '410px', left: '150px', width: '60px', height: '70px' } },
+        { id: 2, style: { top: '410px', left: '230px', width: '60px', height: '70px' } },
+
+        { id: 4, style: { top: '290px', left: '400px', width: '70px', height: '50px' } },
+      ],
+    };
+  },
+
+  computed: {
+    // Calculate the percentage of the container to fill based on the car's length
+    lengthPercentage() {
+      return Math.min((this.carInfo.length / 5.3) * 100, 100);
+    },
+    widthPercentage() {
+      return Math.min((this.carInfo.width / 1.9) * 100, 100);
+    },
+    heightPercentage() {
+      return Math.min((this.carInfo.height / 2) * 100, 100);
+    },
+  },
+
+  methods: {
+    // Methods for car image display
+    async pollForNewImages() {
+      while (true) {
+        this.allImagesFetched = false;
+        await this.fetchAndDisplayImages();
+        this.allImagesFetched = true;
+        await this.autoCheckForNewImages(); // Auto check for new images
+      }
+    },
+
+    async fetchAndDisplayImages() {
+      const newImages = [];
+
+      // Fetch 3 new images one by one from the local 'image_store' folder
+      for (let i = 0; i < 3; i++) {
+        const nextImageNumber = this.imageNumber + i;
+        const newImageUrl = `/image_store/${nextImageNumber}.png`; // Use relative path for local images
+
+        try {
+          await this.checkImageExists(newImageUrl);
+          newImages.push(newImageUrl);
+        } catch (error) {
+          console.error(`Image ${newImageUrl} not found.`);
+        }
+      }
+
+      // Replace images one by one with a delay
+      for (let i = 0; i < newImages.length; i++) {
+        await this.displayNewImage(newImages[i]);
+        await this.wait(1000); // Wait 1 second before showing the next image
+      }
+
+      // Update imageNumber for the next fetch
+      this.imageNumber += 3;
+    },
+
+    async displayNewImage(newImageUrl) {
+      // Shift the images array and add the new image at the end
+      if (this.images.length === 3) {
+        this.images.shift(); // Remove the first image (oldest)
+      }
+      this.images.push(newImageUrl); // Add the new image at the end
+
+      // Trigger the enlargement effect after 3 images are displayed
+      if (this.images.length === 3) {
+        this.showEnlarge = true;
+      }
+    },
+
+    // New function to check for the existence of the next image
+    async autoCheckForNewImages() {
+      const nextImageUrl = `/image_store/${this.imageNumber}.png`;
+
+      while (true) {
+        try {
+          await this.checkImageExists(nextImageUrl);
+          console.log(`New image found: ${nextImageUrl}`);
+          // If the image exists, break the loop and continue fetching new images
+          break;
+        } catch (error) {
+          console.log(`No new image found: ${nextImageUrl}. Checking again in 3 seconds...`);
+        }
+
+        // Wait 3 seconds before checking again
+        await this.wait(3000);
+      }
+    },
+
+    // Parking lot arrow and block sequence
+    startArrowAndBlockSequence() {
+      const sequence = () => {
+        this.showLeftArrow = true;
+        this.flashYellow = true; // Start flashing yellow blocks with "空"
+        setTimeout(() => {
+          this.showLeftArrow = false;
+          this.flashYellow = false;
+          this.showRightArrow = true;
+          this.flashGreen = true; // Start flashing green blocks with "空"
+
+          setTimeout(() => {
+            this.showRightArrow = false;
+            this.flashGreen = false;
+            this.showCZoneText = true;
+            this.flashBlue = true; // Start flashing C区 and display the arrow
+
+            setTimeout(() => {
+              this.showCZoneText = false;
+              this.flashBlue = false; // Stop flashing C区
+              this.showWelcomeText = true; // Show the welcome message again
+
+              // Start the full sequence again after the welcome message
+              setTimeout(() => {
+                this.showWelcomeText = false;
+                sequence(); // Repeat the sequence
+              }, 2000); // Show the welcome message for 10 seconds
+            }, 5000); // Show C区 text for 5 seconds
+          }, 5000); // Show right arrow text for 5 seconds
+        }, 5000); // Show left arrow text for 5 seconds
+      };
+
+      // Start with the welcome message for 10 seconds
+      setTimeout(() => {
+        this.showWelcomeText = false;
+        sequence(); // Start the sequence of other texts
+      }, 2000); // Show the welcome message for 10 seconds
+    },
+
+    // WebSocket initialization
+    initWebSocket() {
+      const socket = new WebSocket("ws://192.168.66.235/ws"); // Connect to your WebSocket server
+
+      socket.onopen = () => {
+        console.log("WebSocket connection established.");
+      };
+
+      socket.onmessage = (event) => {
+        console.log("Message received: ", event.data);
+
+        // Check if the message is the warning signal "58426"
+        if (event.data === "58426") {
+          this.triggerWarning(); // Trigger the red flashing
+        }
+      };
+
+      socket.onclose = () => {
+        console.log("WebSocket connection closed.");
+      };
+
+      socket.onerror = (error) => {
+        console.error("WebSocket error: ", error);
+      };
+    },
+
+    checkImageExists(imageUrl) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => reject(false);
+        img.src = imageUrl;
+      });
+    },
+
+    wait(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    },
+
+    // Trigger the red flashing warning
+    triggerWarning() {
+      this.isWarning = true; // Start flashing red
+
+      // Automatically stop the flashing after 10 seconds
+      setTimeout(() => {
+        this.isWarning = false;
+      }, 2000); // Flash for 10 seconds
+    },
+  },
+
+  mounted() {
+    // Start polling for new images
+    this.pollForNewImages();
+
+    // Start the arrow and block flashing sequence continuously
+    this.startArrowAndBlockSequence();
+
+    // Initialize WebSocket connection
+    this.initWebSocket();
+  },
+};
+</script>
+
+<style scoped>
+/* Overall page layout */
+.page-layout {
+  display: flex;
+  height: 100vh; /* Full height of the viewport */
+}
+
+/* Left half: Parking lot section */
+.parking-lot-container {
+  flex: 1;
+  text-align: center;
+}
+
+/* Parking lot container should be aligned below the title */
+.parking-lot {
+  position: relative;
+  bottom: 0; /* Align the parking lot at the bottom of the left half */
+  left: 50%; /* Center horizontally */
+  transform: translateX(-50%); /* Adjust for centering */
+  width: 570px;
+  height: 480px;
+  /* Add only top and bottom borders */
+  border-left: 2px solid #55BBE4;
+  border-right: 2px solid #55BBE4;
+  border-radius: 10px;
+  background-color: white;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Optional: Add a shadow to make it more visible */
+}
+
+/* Status Circle1 (flashes red) */
+.status-circle1 {
+  position: absolute;
+  top: 10px;
+  left: 280px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: white; /* Default state */
+}
+
+/* Flashing red state */
+.status-circle1.red {
+  background-color: red;
+}
+
+.breathing {
+  animation: flashing 0.5s steps(1) infinite; /* Flash twice per second */
+}
+
+@keyframes flashing {
+  0% {
+    opacity: 1; /* Fully visible */
+  }
+  50% {
+    opacity: 0; /* Invisible */
+  }
+  100% {
+    opacity: 1; /* Fully visible again */
+  }
+}
+
+.status-circle2 {
+  position: absolute;
+  top: -20px;
+  left:-30px;
+  width: 80px;
+  height: 60px;
+  border-radius: 60%;
+  background-color: green;
+}
+
+.circle-text {
+  color: white;
+  font-size: 22px;
+  font-weight: bold;
+  position: absolute;
+  top: 13px;
+  left: 32px;
+}
+
+/* Flashing Animation */
+.breathing {
+  animation: breathing 2s infinite;
+}
+
+.block {
+  position: absolute;
+  border-radius: 5px;
+}
+
+.blue {
+  background-color: blue;
+}
+
+.green {
+  background-color: green;
+}
+
+.green.breathing {
+  animation: breathing 2s infinite;
+}
+
+.light-green {
+  background-color: #8DC21F;
+}
+
+.light-green.breathing {
+  animation: breathing 2s infinite;
+}
+
+/* Text inside green and light-green blocks */
+.block-text {
+  color: white;
+  font-size: 20px;
+  font-weight: bold;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Black Road (expanded height) */
+.road {
+  position: absolute;
+  top: 220px;
+  left: 0;
+  width: 100%;
+  height: 60px; /* Increased height */
+  background-color: orange;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  
+  /* Add only top and bottom borders */
+  border-top: 3px solid #ccc;
+  border-bottom: 3px solid #ccc;
+}
+
+/* Road Text Styling */
+.road-text {
+  font-size: 30px;
+  font-weight: bold;
+  white-space: nowrap; /* Ensure text stays in one line */
+}
+
+/* Arrow pointing to the blue circle (C区) */
+.c-area-arrow {
+  position: absolute;
+  top: 160px;
+  left: -10px;
+  width: 0;
+  height: 0;
+  border-left: 30px solid transparent;
+  border-right: 30px solid transparent;
+  border-bottom: 0px solid orange;
+  transform: rotate(0deg);
+}
+
+/* Arrows on the road */
+.arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 30px solid transparent;
+  border-right: 30px solid transparent;
+  border-bottom: 60px solid orange;
+  transition: all 0.3s ease;
+}
+
+.left-turn {
+  top: 280px; /* Slightly moved down */
+  left: 270px;
+  border-bottom-width: 80px; /* Make arrow longer */
+  transform: rotate(180deg); /* Pointing left */
+}
+
+.right-turn {
+  top: 150px; /* Slightly moved up */
+  left: 270px;
+  border-bottom-width: 80px; /* Make arrow longer */
+  transform: rotate(360deg); /* Pointing right */
+}
+
+@keyframes breathing {
+    0% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.2;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+@media (max-width: 768px) {
+    .dashboard-container {
+      flex-direction: column;
+      align-items: center;
+    }
+  
+    .parking-lot-container {
+      width: 100%;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+  }
+
+/* Right half of the page containing car details and images */
+.right-half {
+  flex: 1; /* Take half the page width */
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background-color: #fff; /* Background for right side */
+  overflow-y: auto; /* Allow scrolling if content overflows */
+}
+
+/* Car details and images styles */
+.car-details-container,
+.car-image-display {
+  margin-bottom: 5px;
+}
+
+.container {
+  margin: 10px 0;
+}
+
+.container-label {
+  margin-bottom: 5px;
+  text-align: left;
+  font-weight: bold;
+}
+
+.bar {
+  position: relative;
+  width: 100%;
+  height: 30px;
+  background-color: #e0e0e0;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+.fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0;
+  background-color: green;
+  transition: width 1s ease;
+}
+
+.red {
+  background-color: red;
+}
+
+.green {
+  background-color: green;
+}
+
+.breathing {
+  animation: breathing 1.5s infinite;
+  opacity: 0.7;
+}
+
+.flashing {
+  animation: flashing 0.8s infinite;
+  opacity: 1;
+}
+
+@keyframes breathing {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes flashing {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.car-image-display {
+  text-align: center;
+}
+
+.image-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.image-container {
+  display: flex;
+  gap: 50px;
+}
+
+.image-container img {
+  width: 100px;
+  transition: transform 0.5s ease, margin-top 0.5s ease;
+}
+
+.middle-image {
+  transform: scale(3);
+  margin-top: 70px;
+}
+
+.side-image {
+  margin-top: 20px;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 1s;
+}
+
+.fade-enter,
+.fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 768px) {
+  .dashboard-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .parking-lot-container {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+}
+</style>
