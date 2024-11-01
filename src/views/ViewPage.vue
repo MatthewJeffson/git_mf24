@@ -95,27 +95,27 @@ export default {
 
       setTimeout(() => {
         this.showImages[1] = true;
-      }, 2000);
+      }, 5000);
 
       setTimeout(() => {
         this.showImages[2] = true;
-      }, 3000);
+      }, 13000);
     },
     startDisplay() {
       // Display left parking text after 1 second
       setTimeout(() => {
         this.showLeftParkingText = true;
-      }, 1000);
+      }, 2000);
 
       // Display right parking text after 2 seconds
       setTimeout(() => {
         this.showRightParkingText = true;
-      }, 2000);
+      }, 6000);
 
       // Display car pass count after 3 seconds
       setTimeout(() => {
         this.showCarPassCount = true;
-      }, 3000);
+      }, 14000);
     },
   },
 };

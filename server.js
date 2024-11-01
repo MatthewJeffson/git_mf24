@@ -3,8 +3,8 @@ const express = require('express');
 const path = require('path');
 const app = express();
 
-// Serve the static files from the dist directory
-app.use(express.static(path.join(__dirname, 'dist')));
+// Serve the static files from the dist/static directory
+app.use('/static', express.static(path.join(__dirname, 'dist/static')));
 
 // Handle SPA (Single Page Application) routing
 app.get('*', function(req, res) {
@@ -12,4 +12,7 @@ app.get('*', function(req, res) {
 });
 
 // Start the app by listening on the default Heroku port
-app.listen(process.env.PORT || 8080);
+const port = process.env.PORT || 8080;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});

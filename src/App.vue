@@ -11,7 +11,7 @@ onMounted(() => {
   // After 10 seconds, navigate to the security camera page
   setTimeout(() => {
     router.push('/security-camera');
-  }, 10000); // 10 seconds delay
+  }, 100000); // 10 seconds delay
 
   // After 30 seconds (from the start), navigate back to the ViewPage
   setTimeout(() => {
