@@ -61,9 +61,9 @@ export default {
   data() {
     return {
       mediaList: [
-        { videoSrc: "/official_car_demo_1.mp4", imageSrc: "/car_demo_1.jpg", text: "监控摄像头：左" },
-        { videoSrc: "/official_car_demo_2.mp4", imageSrc: "/car_demo_2.jpg", text: "监控摄像头：右" },
-        { videoSrc: "/official_car_demo_3.mp4", imageSrc: "/car_demo_3.png", text: "入口摄像头" },
+        { videoSrc: "/official_car_demo_1.mp4", imageSrc: "/static/car_demo_1.jpg", text: "监控摄像头：左" },
+        { videoSrc: "/official_car_demo_2.mp4", imageSrc: "/static/car_demo_2.jpg", text: "监控摄像头：右" },
+        { videoSrc: "/official_car_demo_3.mp4", imageSrc: "/static/car_demo_3.png", text: "入口摄像头" },
       ],
       showImages: [false, false, false], // Controls when each image is shown
       leftParkingText: [
